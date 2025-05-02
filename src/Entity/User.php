@@ -32,6 +32,27 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column]
     private ?string $password = null;
 
+
+    #[ORM\Column(
+        type: 'decimal',
+        precision: 10,
+        scale: 2,
+        options: ['default' => 0.00]
+    )]
+    private float $balance = 0.00;
+
+
+    public function getBalance(): float
+    {
+        return $this->balance;
+    }
+
+    public function setBalance(float $balance): self
+    {
+        $this->balance = $balance;
+        return $this;
+    }
+
     public function getId(): ?int
     {
         return $this->id;

@@ -14,6 +14,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
+use Symfony\Component\Security\Http\Attribute\CurrentUser;
 
 #[Route('/api', name: 'api_')]
 class RegistrationController extends AbstractController
@@ -77,19 +78,13 @@ class RegistrationController extends AbstractController
         );
     }
 
-    #[Route('/user', name: 'api_user', methods: ['GET'])]
-    public function getCurrentUser(#[CurrentUser] ?User $user): JsonResponse
+    #[Route('/user', name: 'api_user')]
+    public function getCurrentUser(#[CurrentUser] User $user = null): JsonResponse
     {
         if (!$user) {
-            return $this->json(
-                ['error' => 'Not authenticated'],
-                JsonResponse::HTTP_UNAUTHORIZED
-            );
+            return $this->json(['error' => 'Not authenticated'], 401);
         }
-
-        return $this->json([
-            'username' => $user->getEmail(),
-            'roles' => $user->getRoles()
-        ]);
+    
+        return $this->json($user);
     }
 }
