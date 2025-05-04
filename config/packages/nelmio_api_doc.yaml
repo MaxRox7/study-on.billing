@@ -1,9 +1,55 @@
+# config/packages/nelmio_api_doc.yaml
 nelmio_api_doc:
     documentation:
         info:
-            title: My App
-            description: This is an awesome app!
+            title: Study-On.Billing
+            description: Пожалуйста работай
             version: 1.0.0
-    areas: # to filter documented areas
+        paths:
+            /api/login_check:
+                post:
+                    summary: Авторизация пользователя
+                    description: Получение JWT токена по почте и паролю
+                    tags:
+                        - Авторизация
+                    requestBody:
+                        content:
+                            application/json:
+                                schema:
+                                    type: object
+                                    properties:
+                                        username:
+                                            type: string
+                                            example: maxim@bk.ru      # <-- Исправленный пример
+                                        password:
+                                            type: string
+                                            example: 1234567         # <-- Исправленный пример
+                                    required: [username, password]
+                    responses:
+                        '200':
+                            description: Успешная авторизация
+                            content:
+                                application/json:
+                                    schema:
+                                        type: object
+                                        properties:
+                                            token:
+                                                type: string
+                                                example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                        '401':
+                            description: Неверные учетные данные     # <-- Исправлено описание
+                            content:
+                                application/json:
+                                    schema:
+                                        type: object
+                                        properties:
+                                            code: 
+                                                type: integer
+                                                example: 401
+                                            message:
+                                                type: string
+                                                example: "Invalid credentials."
+
+    areas:
         path_patterns:
-            - ^/api(?!/doc$) # Accepts routes under /api except /api/doc
+            - ^/api(?!/doc$)

@@ -34,8 +34,9 @@ security:
     access_control:
         - { path: ^/api/register, roles: PUBLIC_ACCESS  }
         - { path: ^/api/login, roles: PUBLIC_ACCESS  }
+        - { path: ^/api/v1/doc, roles: PUBLIC_ACCESS  }
         - { path: ^/api,       roles: IS_AUTHENTICATED_FULLY }
-
+        
 when@test:
     security:
         password_hashers:
