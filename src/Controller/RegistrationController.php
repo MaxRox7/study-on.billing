@@ -30,9 +30,9 @@ class RegistrationController extends AbstractController
     ) {
     }
 
-    #[Route('/register', name: 'register', methods: ['POST'])]
+    #[Route('/v1/register', name: 'register', methods: ['POST'])]
     #[OA\Post(
-        path: '/api/register',
+        path: '/api/v1/register',
         summary: 'Регистрация нового пользователя',
         description: 'Создаёт нового пользователя с указанным логином, паролем и email-адресом. Требуется валидный формат для пароля и email.',
         tags: ['Авторизация']
@@ -146,9 +146,9 @@ class RegistrationController extends AbstractController
         );
     }
 
-    #[Route('/user', name: 'api_user')]
+    #[Route('/v1/user/current', name: 'api_user')]
     #[OA\Get(
-        path: '/api/user',
+        path: '/v1/users/current',
         summary: 'Получение текущего пользователя',
         description: 'Возвращает данные текущего авторизованного пользователя. Требуется JWT токен в заголовке Authorization.',
         tags: ['Авторизация']

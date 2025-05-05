@@ -6,7 +6,7 @@ nelmio_api_doc:
             description: Пожалуйста работай
             version: 1.0.0
         paths:
-            /api/login_check:
+            /api/v1/auth:
                 post:
                     summary: Авторизация пользователя
                     description: Получение JWT токена по почте и паролю
