@@ -146,9 +146,9 @@ class RegistrationController extends AbstractController
         );
     }
 
-    #[Route('/v1/user/current', name: 'api_user')]
+    #[Route('/v1/users/current', name: 'api_user')]
     #[OA\Get(
-        path: '/v1/users/current',
+        path: '/api/v1/users/current',
         summary: 'Получение текущего пользователя',
         description: 'Возвращает данные текущего авторизованного пользователя. Требуется JWT токен в заголовке Authorization.',
         tags: ['Авторизация']
