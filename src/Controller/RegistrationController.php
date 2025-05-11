@@ -18,6 +18,7 @@ use Symfony\Component\Security\Http\Attribute\CurrentUser;
 use Nelmio\ApiDocBundle\Attribute\Model;
 use Nelmio\ApiDocBundle\Attribute\Security;
 use OpenApi\Attributes as OA;
+use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 
 #[Route('/api', name: 'api_')]
 class RegistrationController extends AbstractController
@@ -26,7 +27,8 @@ class RegistrationController extends AbstractController
         private EntityManagerInterface $em,
         private UserPasswordHasherInterface $passwordHasher,
         private SerializerInterface $serializer,
-        private ValidatorInterface $validator
+        private ValidatorInterface $validator,
+        private JWTTokenManagerInterface $jwtManager
     ) {
     }
 
@@ -34,68 +36,55 @@ class RegistrationController extends AbstractController
     #[OA\Post(
         path: '/api/v1/register',
         summary: 'Регистрация нового пользователя',
-        description: 'Создаёт нового пользователя с указанным логином, паролем и email-адресом. Требуется валидный формат для пароля и email.',
+        description: 'Создаёт нового пользователя и возвращает JWT токен для авторизации.',
         tags: ['Авторизация']
     )]
     #[OA\RequestBody(
         content: new OA\JsonContent(
             type: 'object',
             properties: [
-                new OA\Property(property: 'username', type: 'string', description: 'Username of the user'),
-                new OA\Property(property: 'password', type: 'string', description: 'Password for the user'),
-                new OA\Property(property: 'email', type: 'string', description: 'User email address'),
+                new OA\Property(property: 'email', type: 'string', format: 'email'),
+                new OA\Property(property: 'password', type: 'string', minLength: 6)
             ],
             example: [
-                'password' => 'securePassword123',
-                'email' => 'johndoe@example.com',
+                'email' => 'user@example.com',
+                'password' => 'securePassword123'
             ]
         )
     )]
     #[OA\Response(
-        response: 200,
-        description: 'User registered successfully',
+        response: 201,
+        description: 'Успешная регистрация',
         content: new OA\JsonContent(
-            type: 'object',
             properties: [
-                new OA\Property(
-                    property: 'message',
-                    type: 'string',
-                    description: 'Confirmation message'
-                )
+                new OA\Property(property: 'token', type: 'string')
             ],
             example: [
-                'message' => 'User registered successfully'
+                'token' => 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...'
             ]
         )
     )]
-
     #[OA\Response(
         response: 400,
-        description: 'Validation failed',
+        description: 'Ошибки валидации',
         content: new OA\JsonContent(
-            type: 'object',
             properties: [
                 new OA\Property(
                     property: 'errors',
                     type: 'object',
-                    description: 'Validation errors for specific fields',
-                    additionalProperties: new OA\AdditionalProperties(
-                        type: 'string'
-                    )
+                    additionalProperties: new OA\AdditionalProperties(type: 'string')
                 )
             ],
             example: [
                 'errors' => [
                     'email' => 'Неверный формат email',
-                    'password' => 'Пароль должен содержать минимум 6 символов'
+                    'password' => 'Пароль должен быть не менее 6 символов'
                 ]
             ]
         )
     )]
     #[OA\Tag(name: 'Авторизация')]
     #[Security(name: 'Bearer')]
-
-
     public function register(Request $request): JsonResponse
     {
         /** @var UserDto $userDto */
@@ -110,29 +99,31 @@ class RegistrationController extends AbstractController
             return $this->formatValidationErrors($errors);
         }
 
-        // Исправлено: userDto->username -> userDto->email
         if ($this->em->getRepository(User::class)->findOneBy(['email' => $userDto->email])) {
             return $this->json(
-                ['errors' => ['email' => 'User with this email already exists']],
+                ['errors' => ['email' => 'Пользователь с таким email уже существует']],
                 JsonResponse::HTTP_BAD_REQUEST
             );
         }
 
         $user = new User();
-        // Исправлено: userDto->username -> userDto->email
         $user->setEmail($userDto->email);
-        $user->setPassword($this->passwordHasher->hashPassword($user, $userDto->password));
+        $user->setPassword(
+            $this->passwordHasher->hashPassword($user, $userDto->password)
+        );
         $user->setRoles(['ROLE_USER']);
 
         $this->em->persist($user);
         $this->em->flush();
 
+        // Генерируем JWT токен
+        $token = $this->jwtManager->create($user);
+
         return $this->json(
-            ['message' => 'User registered successfully'],
+            ['token' => $token],
             JsonResponse::HTTP_CREATED
         );
     }
-
     private function formatValidationErrors($errors): JsonResponse
     {
         $errorMessages = [];
@@ -146,7 +137,7 @@ class RegistrationController extends AbstractController
         );
     }
 
-    #[Route('/v1/users/current', name: 'api_user')]
+    #[Route('/v1/users/current', name: 'api_user', methods: ['GET'])]
     #[OA\Get(
         path: '/api/v1/users/current',
         summary: 'Получение текущего пользователя',
@@ -167,9 +158,7 @@ class RegistrationController extends AbstractController
                     property: 'roles',
                     type: 'array',
                     items: new OA\Items(type: 'string', example: 'ROLE_USER')
-                ),
-                new OA\Property(property: 'password', type: 'string', example: '$2y$13$1h5oiORKDvTPxIFAv4nMnOaJ9kgiVlKs.HPO7sN.0Wyh2Fb8htrfi'),
-            ]
+                ),            ]
         )
     )]
     #[OA\Response(
@@ -186,9 +175,15 @@ class RegistrationController extends AbstractController
     public function getCurrentUser(#[CurrentUser] User $user = null): JsonResponse
     {
         if (!$user) {
-            return $this->json(['message' => 'Not authenticated'], 401);
+            return $this->json(['message' => 'Not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
         }
     
-        return $this->json($user);
+        return $this->json([
+            'id' => $user->getId(),
+            'email' => $user->getEmail(),
+            'userIdentifier' => $user->getUserIdentifier(),
+            'roles' => $user->getRoles(),
+            'balance' => $user->getBalance(),
+        ]);
     }
 }
