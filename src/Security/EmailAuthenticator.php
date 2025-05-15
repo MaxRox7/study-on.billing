@@ -17,13 +17,16 @@ use Symfony\Component\Security\Http\Authenticator\Passport\Badge\RememberMeBadge
 use Symfony\Component\HttpFoundation\Response;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
+use Gesdinet\JWTRefreshTokenBundle\Model\RefreshTokenManagerInterface;
+use Gesdinet\JWTRefreshTokenBundle\Entity\RefreshToken;
 
 class EmailAuthenticator extends AbstractAuthenticator
 {
     public function __construct(
         private ValidatorInterface $validator,
         private SerializerInterface $serializer,
-        private JWTTokenManagerInterface $jwtManager
+        private JWTTokenManagerInterface $jwtManager,
+        private RefreshTokenManagerInterface $refreshTokenManager
     ) {
     }
 
@@ -61,8 +64,20 @@ class EmailAuthenticator extends AbstractAuthenticator
         /** @var UserInterface $user */
         $user = $token->getUser();
         $jwt = $this->jwtManager->create($user);
-
-        return new JsonResponse(['token' => $jwt], Response::HTTP_OK);
+    
+        // Создание refresh token
+        $refreshToken = new RefreshToken();
+        $refreshToken->setUsername($user->getUserIdentifier());
+        $refreshToken->setRefreshToken(bin2hex(random_bytes(64))); // безопасный токен
+        $refreshToken->setValid((new \DateTime())->modify('+30 days')); // срок действия
+    
+        // Сохраняем токен
+        $this->refreshTokenManager->save($refreshToken);
+    
+        return new JsonResponse([
+            'token' => $jwt,
+            'refresh_token' => $refreshToken->getRefreshToken()
+        ], Response::HTTP_OK);
     }
 
     public function onAuthenticationFailure(Request $request, AuthenticationException $exception): JsonResponse

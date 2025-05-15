@@ -12,6 +12,12 @@ security:
                 property: email
 
     firewalls:
+        api_token_refresh:
+            pattern: ^/api/v1/token/refresh
+            stateless: true
+            provider: app_user_provider
+            refresh_jwt:
+                check_path: /api/v1/token/refresh
         login:
             pattern: ^/api
             stateless: true
@@ -35,7 +41,9 @@ security:
         - { path: ^/api/v1/register, roles: PUBLIC_ACCESS  }
         - { path: ^/api/v1/auth, roles: PUBLIC_ACCESS  }
         - { path: ^/api/v1/doc, roles: PUBLIC_ACCESS  }
+        - { path: ^/api/v1/token/refresh, roles: PUBLIC_ACCESS }
         - { path: ^/api,       roles: IS_AUTHENTICATED_FULLY }
+
         
 when@test:
     security:
