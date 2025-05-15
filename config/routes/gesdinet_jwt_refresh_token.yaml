@@ -1,5 +1,5 @@
 # config/routes/gesdinet_jwt_refresh_token.yaml
-gesdinet_jwt_refresh_token:
-    path: /api/v1/token/refresh
-    controller: gesdinet.jwtrefreshtoken::refresh
-    methods: POST
+# gesdinet_jwt_refresh_token:
+#     path: /api/v1/token/refresh
+#     controller: gesdinet.jwtrefreshtoken::refresh
+#     methods: POST

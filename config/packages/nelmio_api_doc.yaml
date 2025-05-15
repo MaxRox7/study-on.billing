@@ -18,7 +18,7 @@ nelmio_api_doc:
                                 schema:
                                     type: object
                                     properties:
-                                        username:
+                                        email:
                                             type: string
                                             example: maxim@bk.ru      # <-- Исправленный пример
                                         password:
@@ -36,6 +36,9 @@ nelmio_api_doc:
                                             token:
                                                 type: string
                                                 example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                                            refresh_token:
+                                                type: string
+                                                exambple: "fgfdgJhbGciOiJdfgfdgIkpXVCJ9..."
                         '401':
                             description: Неверные учетные данные     # <-- Исправлено описание
                             content:
@@ -49,6 +52,49 @@ nelmio_api_doc:
                                             message:
                                                 type: string
                                                 example: "Invalid credentials."
+            /api/v1/refresh:
+                post:
+                    summary: Обновление JWT токена с помощью refresh токена
+                    description: Получение нового JWT и refresh токенов по старому refresh токену
+                    tags:
+                        - Авторизация
+                    requestBody:
+                        content:
+                            application/json:
+                                schema:
+                                    type: object
+                                    required: [refresh_token]         # <-- исправлено
+                                    properties:
+                                        refresh_token:
+                                            type: string
+                                            example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    responses:
+                        '200':
+                            description: Токены успешно обновлены
+                            content:
+                                application/json:
+                                    schema:
+                                        type: object
+                                        properties:
+                                            token:
+                                                type: string
+                                                example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                                            refresh_token:
+                                                type: string
+                                                example: "ertyrtrsdfFSDnR5cCI6IkpXVCJ9..."
+                        '401':
+                            description: Неверный или просроченный refresh токен
+                            content:
+                                application/json:
+                                    schema:
+                                        type: object
+                                        properties:
+                                            code:
+                                                type: integer
+                                                example: 401
+                                            message:
+                                                type: string
+                                                example: "Invalid refresh token."
 
     areas:
         path_patterns:
