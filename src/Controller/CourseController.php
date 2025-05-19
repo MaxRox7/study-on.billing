@@ -51,9 +51,12 @@ class CourseController extends AbstractController
         foreach ($courses as $course) {
             $item = [
                 'code' => $course->getCode(),
-                'type' => $course->getType() === 0 ? 'rent' : 'buy',
+                'type' => $course->getType() === 0 ? 'rent' : ($course->getType() === 1 ? 'buy' : 'free'),
             ];
-            if ($course->getType() === 0 || $course->getType() === 1) {
+            if ($course->getType() === 1) { // buy
+                $item['price'] = number_format($course->getPrice(), 2, '.', '');
+            }
+            if ($course->getType() === 0) { // rent
                 $item['price'] = number_format($course->getPrice(), 2, '.', '');
             }
             $result[] = $item;
@@ -102,9 +105,12 @@ class CourseController extends AbstractController
         }
         $result = [
             'code' => $course->getCode(),
-            'type' => $course->getType() === 0 ? 'rent' : 'buy',
+            'type' => $course->getType() === 0 ? 'rent' : ($course->getType() === 1 ? 'buy' : 'free'),
         ];
-        if ($course->getType() === 0 || $course->getType() === 1) {
+        if ($course->getType() === 1) { // buy
+            $result['price'] = number_format($course->getPrice(), 2, '.', '');
+        }
+        if ($course->getType() === 0) { // rent
             $result['price'] = number_format($course->getPrice(), 2, '.', '');
         }
         return $this->json($result);
@@ -169,7 +175,7 @@ class CourseController extends AbstractController
         } catch (\Throwable $e) {
             return $this->json(['code' => 500, 'message' => 'Ошибка оплаты: ' . $e->getMessage()], 500);
         }
-        $type = $course->getType() === 0 ? 'rent' : 'buy';
+        $type = $course->getType() === 0 ? 'rent' : ($course->getType() === 1 ? 'buy' : 'free');
         $expiresAt = $transaction->getExpiresAt() ? $transaction->getExpiresAt()->format(DATE_ATOM) : null;
         return $this->json([
             'success' => true,

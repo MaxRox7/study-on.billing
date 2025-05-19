@@ -55,6 +55,19 @@ class PaymentService
         $this->em->beginTransaction();
         try {
             $price = $course->getPrice();
+            if ($course->getType() === 3) { // free
+                $transaction = new Transaction();
+                $transaction->setUser($user);
+                $transaction->setCourse($course);
+                $transaction->setType(1); // payment
+                $transaction->setAmount(0);
+                $transaction->setCreatedAt(new \DateTimeImmutable());
+                $transaction->setExpiresAt(null);
+                $this->em->persist($transaction);
+                $this->em->flush();
+                $this->em->commit();
+                return $transaction;
+            }
             if ($user->getBalance() < $price) {
                 throw new \RuntimeException('Недостаточно средств на балансе');
             }
