@@ -71,7 +71,7 @@ class EmailAuthenticator extends AbstractAuthenticator
         $refreshToken->setRefreshToken(bin2hex(random_bytes(64))); // безопасный токен
         $refreshToken->setValid((new \DateTime())->modify('+30 days')); // срок действия
     
-        // Сохраняем токенaa
+        // Сохраняем токенaaa
         $this->refreshTokenManager->save($refreshToken);
     
         return new JsonResponse([
