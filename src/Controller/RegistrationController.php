@@ -119,10 +119,10 @@ class RegistrationController extends AbstractController
         // Генерируем JWT токен
         $token = $this->jwtManager->create($user);
 
-        return $this->json(
-            ['token' => $token],
-            JsonResponse::HTTP_CREATED
-        );
+        return $this->json([
+            'status' => 'ok',
+            'email' => $user->getEmail(),
+        ], JsonResponse::HTTP_CREATED);
     }
     private function formatValidationErrors($errors): JsonResponse
     {
