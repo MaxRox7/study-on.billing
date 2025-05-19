@@ -117,6 +117,9 @@ class TransactionController extends AbstractController
             if ($transaction->getCourse()) {
                 $item['course_code'] = $transaction->getCourse()->getCode();
             }
+            if ($transaction->getExpiresAt()) {
+                $item['expires_at'] = $transaction->getExpiresAt()->format(DATE_ATOM);
+            }
             $result[] = $item;
         }
         return $this->json($result);

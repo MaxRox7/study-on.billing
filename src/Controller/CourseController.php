@@ -53,7 +53,7 @@ class CourseController extends AbstractController
                 'code' => $course->getCode(),
                 'type' => $course->getType() === 0 ? 'rent' : 'buy',
             ];
-            if ($course->getType() !== 1) { // buy
+            if ($course->getType() === 0 || $course->getType() === 1) {
                 $item['price'] = number_format($course->getPrice(), 2, '.', '');
             }
             $result[] = $item;
@@ -104,7 +104,7 @@ class CourseController extends AbstractController
             'code' => $course->getCode(),
             'type' => $course->getType() === 0 ? 'rent' : 'buy',
         ];
-        if ($course->getType() !== 1) { // buy
+        if ($course->getType() === 0 || $course->getType() === 1) {
             $result['price'] = number_format($course->getPrice(), 2, '.', '');
         }
         return $this->json($result);
