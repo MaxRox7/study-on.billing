@@ -12,11 +12,12 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Http\Attribute\CurrentUser;
 use OpenApi\Attributes as OA;
+use App\Service\PaymentService;
 
 #[Route('/api/v1/courses')]
 class CourseController extends AbstractController
 {
-    public function __construct(private EntityManagerInterface $em)
+    public function __construct(private EntityManagerInterface $em, private PaymentService $paymentService)
     {
     }
 
@@ -157,12 +158,23 @@ class CourseController extends AbstractController
         if (!$user) {
             return $this->json(['code' => 401, 'message' => 'Требуется аутентификация'], 401);
         }
-        // Здесь должна быть логика оплаты (проверка баланса, создание транзакции и т.д.)
-        // Пока что возвращаем заглушку успешного ответа
+        $course = $this->em->getRepository(Course::class)->findOneBy(['code' => $code]);
+        if (!$course) {
+            return $this->json(['code' => 404, 'message' => 'Курс не найден'], 404);
+        }
+        try {
+            $transaction = $this->paymentService->payCourse($user, $course);
+        } catch (\RuntimeException $e) {
+            return $this->json(['code' => 406, 'message' => $e->getMessage()], 406);
+        } catch (\Throwable $e) {
+            return $this->json(['code' => 500, 'message' => 'Ошибка оплаты: ' . $e->getMessage()], 500);
+        }
+        $type = $course->getType() === 0 ? 'rent' : 'buy';
+        $expiresAt = $transaction->getExpiresAt() ? $transaction->getExpiresAt()->format(DATE_ATOM) : null;
         return $this->json([
             'success' => true,
-            'course_type' => 'rent',
-            'expires_at' => (new \DateTimeImmutable('+30 days'))->format(DATE_ATOM),
+            'course_type' => $type,
+            'expires_at' => $expiresAt,
         ]);
     }
 }
