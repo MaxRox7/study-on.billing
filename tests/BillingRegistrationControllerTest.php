@@ -95,7 +95,7 @@ class BillingRegistrationControllerTest extends WebTestCase
         $this->assertResponseStatusCodeSame(400);
         $response = json_decode($this->client->getResponse()->getContent(), true);
         $this->assertArrayHasKey('errors', $response);
-        $this->assertEquals('User with this email already exists', $response['errors']['email']);
+        $this->assertEquals('Пользователь с таким email уже существует', $response['errors']['email']);
     }
     
 
