@@ -8,91 +8,98 @@ use App\Entity\Transaction;
 use App\Repository\TransactionRepository;
 use App\Repository\CourseRepository;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\DBAL\Exception as DBALException;
+use Psr\Log\LoggerInterface;
 
 class PaymentService
 {
+    public const TYPE_DEPOSIT = 0;
+    public const TYPE_PAYMENT = 1;
+    public const COURSE_TYPE_RENT = 0;
+    public const COURSE_TYPE_FREE = 3;
+
     public function __construct(
         private EntityManagerInterface $em,
         private TransactionRepository $transactionRepository,
-        private CourseRepository $courseRepository
+        private CourseRepository $courseRepository,
+        private LoggerInterface $logger
     ) {
     }
 
     /**
      * Пополнение счета пользователя
-     * @throws \Throwable
+     * @throws \InvalidArgumentException|\Throwable
      */
     public function deposit(User $user, float $amount): void
     {
-        $this->em->beginTransaction();
-        try {
-            $transaction = new Transaction();
-            $transaction->setUser($user);
-            $transaction->setType(0); // deposit
-            $transaction->setAmount($amount);
-            $transaction->setCreatedAt(new \DateTimeImmutable());
-            $transaction->setExpiresAt(null);
-            $this->em->persist($transaction);
-
+        if ($amount <= 0) {
+            throw new \InvalidArgumentException('Сумма пополнения должна быть положительной');
+        }
+        $this->em->wrapInTransaction(function () use ($user, $amount) {
+            $transaction = $this->createTransaction(
+                user: $user,
+                course: null,
+                type: self::TYPE_DEPOSIT,
+                amount: $amount,
+                expiresAt: null
+            );
             $user->setBalance($user->getBalance() + $amount);
             $this->em->persist($user);
-
-            $this->em->flush();
-            $this->em->commit();
-        } catch (\Throwable $e) {
-            $this->em->rollback();
-            throw $e;
-        }
+        });
     }
 
     /**
      * Оплата курса пользователем
-     * @throws \Exception
+     * @throws \RuntimeException
      */
     public function payCourse(User $user, Course $course): Transaction
     {
-        $this->em->beginTransaction();
-        try {
+        return $this->em->wrapInTransaction(function () use ($user, $course) {
             $price = $course->getPrice();
-            if ($course->getType() === 3) { // free
-                $transaction = new Transaction();
-                $transaction->setUser($user);
-                $transaction->setCourse($course);
-                $transaction->setType(1); // payment
-                $transaction->setAmount(0);
-                $transaction->setCreatedAt(new \DateTimeImmutable());
-                $transaction->setExpiresAt(null);
-                $this->em->persist($transaction);
-                $this->em->flush();
-                $this->em->commit();
-                return $transaction;
+            if ($course->getType() === self::COURSE_TYPE_FREE) {
+                return $this->createTransaction(
+                    user: $user,
+                    course: $course,
+                    type: self::TYPE_PAYMENT,
+                    amount: 0,
+                    expiresAt: null
+                );
             }
             if ($user->getBalance() < $price) {
                 throw new \RuntimeException('Недостаточно средств на балансе');
             }
-            $transaction = new Transaction();
-            $transaction->setUser($user);
-            $transaction->setCourse($course);
-            $transaction->setType(1); // payment
-            $transaction->setAmount(-$price);
-            $transaction->setCreatedAt(new \DateTimeImmutable());
             $expiresAt = null;
-            if ($course->getType() === 0) { // rent
+            if ($course->getType() === self::COURSE_TYPE_RENT) {
                 $expiresAt = (new \DateTimeImmutable())->modify('+30 days');
             }
-            $transaction->setExpiresAt($expiresAt);
-            $this->em->persist($transaction);
-
+            $transaction = $this->createTransaction(
+                user: $user,
+                course: $course,
+                type: self::TYPE_PAYMENT,
+                amount: -$price,
+                expiresAt: $expiresAt
+            );
             $user->setBalance($user->getBalance() - $price);
             $this->em->persist($user);
-
-            $this->em->flush();
-            $this->em->commit();
             return $transaction;
-        } catch (\Throwable $e) {
-            $this->em->rollback();
-            throw $e;
+        });
+    }
+
+    /**
+     * Создание и сохранение транзакции
+     */
+    private function createTransaction(User $user, ?Course $course, int $type, float $amount, ?\DateTimeImmutable $expiresAt): Transaction
+    {
+        $transaction = new Transaction();
+        $transaction->setUser($user);
+        if ($course) {
+            $transaction->setCourse($course);
         }
+        $transaction->setType($type);
+        $transaction->setAmount($amount);
+        $transaction->setCreatedAt(new \DateTimeImmutable());
+        $transaction->setExpiresAt($expiresAt);
+        $this->em->persist($transaction);
+        $this->em->flush();
+        return $transaction;
     }
 }
