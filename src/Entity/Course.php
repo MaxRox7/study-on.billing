@@ -17,6 +17,9 @@ class Course
     #[ORM\Column(type: 'string', length: 255, unique: true)]
     private string $code;
 
+    #[ORM\Column(type: 'string', length: 255)]
+    private string $title;
+
     #[ORM\Column(type: 'smallint')]
     private int $type;
 
@@ -36,6 +39,17 @@ class Course
     public function setCode(string $code): self
     {
         $this->code = $code;
+        return $this;
+    }
+
+    public function getTitle(): string
+    {
+        return $this->title;
+    }
+
+    public function setTitle(string $title): self
+    {
+        $this->title = $title;
         return $this;
     }
 

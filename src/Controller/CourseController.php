@@ -11,6 +11,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Http\Attribute\CurrentUser;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 use OpenApi\Attributes as OA;
 use App\Service\PaymentService;
 
@@ -36,6 +37,7 @@ class CourseController extends AbstractController
                     items: new OA\Items(
                         properties: [
                             new OA\Property(property: 'code', type: 'string'),
+                            new OA\Property(property: 'title', type: 'string'),
                             new OA\Property(property: 'type', type: 'string'),
                             new OA\Property(property: 'price', type: 'string', nullable: true),
                         ]
@@ -51,6 +53,7 @@ class CourseController extends AbstractController
         foreach ($courses as $course) {
             $item = [
                 'code' => $course->getCode(),
+                'title' => $course->getTitle(),
                 'type' => $course->getType() === 0 ? 'rent' : ($course->getType() === 1 ? 'buy' : 'free'),
             ];
             if ($course->getType() === 1) { // buy
@@ -80,6 +83,7 @@ class CourseController extends AbstractController
                 content: new OA\JsonContent(
                     properties: [
                         new OA\Property(property: 'code', type: 'string'),
+                        new OA\Property(property: 'title', type: 'string'),
                         new OA\Property(property: 'type', type: 'string'),
                         new OA\Property(property: 'price', type: 'string', nullable: true),
                     ]
@@ -105,6 +109,7 @@ class CourseController extends AbstractController
         }
         $result = [
             'code' => $course->getCode(),
+            'title' => $course->getTitle(),
             'type' => $course->getType() === 0 ? 'rent' : ($course->getType() === 1 ? 'buy' : 'free'),
         ];
         if ($course->getType() === 1) { // buy
@@ -182,5 +187,215 @@ class CourseController extends AbstractController
             'course_type' => $type,
             'expires_at' => $expiresAt,
         ]);
+    }
+
+    #[Route('', name: 'course_create', methods: ['POST'])]
+    #[IsGranted('ROLE_SUPER_ADMIN')]
+    #[OA\Post(
+        path: '/api/v1/courses',
+        summary: 'Создание курса',
+        description: 'Создание нового курса. Доступно только супер-администраторам.',
+        tags: ['Курсы'],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                properties: [
+                    new OA\Property(property: 'type', type: 'string', enum: ['rent', 'free', 'buy']),
+                    new OA\Property(property: 'title', type: 'string'),
+                    new OA\Property(property: 'code', type: 'string'),
+                    new OA\Property(property: 'price', type: 'number', nullable: true),
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(
+                response: 201,
+                description: 'Курс успешно создан',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'success', type: 'boolean'),
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 400,
+                description: 'Ошибка валидации',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer'),
+                        new OA\Property(property: 'message', type: 'string'),
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 409,
+                description: 'Курс с таким кодом уже существует',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer'),
+                        new OA\Property(property: 'message', type: 'string'),
+                    ]
+                )
+            )
+        ]
+    )]
+    public function create(Request $request): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true);
+        
+        if (!$data) {
+            return $this->json(['code' => 400, 'message' => 'Некорректные данные JSON'], 400);
+        }
+
+        // Валидация обязательных полей
+        if (empty($data['type']) || empty($data['title']) || empty($data['code'])) {
+            return $this->json(['code' => 400, 'message' => 'Обязательные поля: type, title, code'], 400);
+        }
+
+        // Проверка корректности типа
+        $typeMap = ['rent' => 0, 'buy' => 1, 'free' => 3];
+        if (!isset($typeMap[$data['type']])) {
+            return $this->json(['code' => 400, 'message' => 'Некорректный тип курса'], 400);
+        }
+
+        // Проверка уникальности кода
+        $existingCourse = $this->em->getRepository(Course::class)->findOneBy(['code' => $data['code']]);
+        if ($existingCourse) {
+            return $this->json(['code' => 409, 'message' => 'Курс с таким кодом уже существует'], 409);
+        }
+
+        // Валидация цены для платных курсов
+        $price = 0.0;
+        if ($data['type'] !== 'free') {
+            if (!isset($data['price']) || !is_numeric($data['price']) || $data['price'] < 0) {
+                return $this->json(['code' => 400, 'message' => 'Для платных курсов требуется корректная цена'], 400);
+            }
+            $price = (float) $data['price'];
+        }
+
+        $course = new Course();
+        $course->setCode($data['code']);
+        $course->setTitle($data['title']);
+        $course->setType($typeMap[$data['type']]);
+        $course->setPrice($price);
+
+        $this->em->persist($course);
+        $this->em->flush();
+
+        return $this->json(['success' => true], 201);
+    }
+
+    #[Route('/{code}', name: 'course_edit', methods: ['POST'])]
+    #[IsGranted('ROLE_SUPER_ADMIN')]
+    #[OA\Post(
+        path: '/api/v1/courses/{code}',
+        summary: 'Редактирование курса',
+        description: 'Редактирование существующего курса. Доступно только супер-администраторам.',
+        tags: ['Курсы'],
+        parameters: [
+            new OA\Parameter(name: 'code', in: 'path', required: true, schema: new OA\Schema(type: 'string')),
+        ],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                properties: [
+                    new OA\Property(property: 'type', type: 'string', enum: ['rent', 'free', 'buy']),
+                    new OA\Property(property: 'title', type: 'string'),
+                    new OA\Property(property: 'code', type: 'string'),
+                    new OA\Property(property: 'price', type: 'number', nullable: true),
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Курс успешно отредактирован',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'success', type: 'boolean'),
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 400,
+                description: 'Ошибка валидации',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer'),
+                        new OA\Property(property: 'message', type: 'string'),
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 404,
+                description: 'Курс не найден',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer'),
+                        new OA\Property(property: 'message', type: 'string'),
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 409,
+                description: 'Курс с новым кодом уже существует',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'code', type: 'integer'),
+                        new OA\Property(property: 'message', type: 'string'),
+                    ]
+                )
+            )
+        ]
+    )]
+    public function edit(string $code, Request $request): JsonResponse
+    {
+        $course = $this->em->getRepository(Course::class)->findOneBy(['code' => $code]);
+        if (!$course) {
+            return $this->json(['code' => 404, 'message' => 'Курс не найден'], 404);
+        }
+
+        $data = json_decode($request->getContent(), true);
+        
+        if (!$data) {
+            return $this->json(['code' => 400, 'message' => 'Некорректные данные JSON'], 400);
+        }
+
+        // Валидация обязательных полей
+        if (empty($data['type']) || empty($data['title']) || empty($data['code'])) {
+            return $this->json(['code' => 400, 'message' => 'Обязательные поля: type, title, code'], 400);
+        }
+
+        // Проверка корректности типа
+        $typeMap = ['rent' => 0, 'buy' => 1, 'free' => 3];
+        if (!isset($typeMap[$data['type']])) {
+            return $this->json(['code' => 400, 'message' => 'Некорректный тип курса'], 400);
+        }
+
+        // Проверка уникальности нового кода (если он изменился)
+        if ($data['code'] !== $code) {
+            $existingCourse = $this->em->getRepository(Course::class)->findOneBy(['code' => $data['code']]);
+            if ($existingCourse) {
+                return $this->json(['code' => 409, 'message' => 'Курс с новым кодом уже существует'], 409);
+            }
+        }
+
+        // Валидация цены для платных курсов
+        $price = 0.0;
+        if ($data['type'] !== 'free') {
+            if (!isset($data['price']) || !is_numeric($data['price']) || $data['price'] < 0) {
+                return $this->json(['code' => 400, 'message' => 'Для платных курсов требуется корректная цена'], 400);
+            }
+            $price = (float) $data['price'];
+        }
+
+        $course->setCode($data['code']);
+        $course->setTitle($data['title']);
+        $course->setType($typeMap[$data['type']]);
+        $course->setPrice($price);
+
+        $this->em->flush();
+
+        return $this->json(['success' => true]);
     }
 }

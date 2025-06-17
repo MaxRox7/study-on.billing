@@ -24,6 +24,7 @@
         "symfony/dotenv": "7.2.*",
         "symfony/flex": "^2",
         "symfony/framework-bundle": "7.2.*",
+        "symfony/mailer": "7.2.*",
         "symfony/maker-bundle": "^1.63",
         "symfony/phpunit-bridge": "^7.2",
         "symfony/runtime": "7.2.*",

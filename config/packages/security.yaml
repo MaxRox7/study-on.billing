@@ -42,8 +42,9 @@ security:
         - { path: ^/api/v1/auth, roles: PUBLIC_ACCESS  }
         - { path: ^/api/v1/doc, roles: PUBLIC_ACCESS  }
         - { path: ^/api/v1/token/refresh, roles: PUBLIC_ACCESS }
-        - { path: ^/api/v1/courses, roles: PUBLIC_ACCESS }
-        - { path: ^/api/v1/courses/\d+, roles: PUBLIC_ACCESS }
+        - { path: ^/api/v1/courses$, roles: PUBLIC_ACCESS, methods: [GET] }
+        - { path: ^/api/v1/courses/[^/]+$, roles: PUBLIC_ACCESS, methods: [GET] }
+        - { path: ^/api/v1/courses/[^/]+/pay$, roles: IS_AUTHENTICATED_FULLY, methods: [POST] }
         - { path: ^/api,       roles: IS_AUTHENTICATED_FULLY }
 
        

@@ -33,7 +33,7 @@ class UserFixtures extends Fixture
             ],
             [
                 'email' => 'admin@mail.ru',
-                'roles' => ['ROLE_ADMIN'],
+                'roles' => ['ROLE_SUPER_ADMIN'],
                 'balance' => 99999.99,
                 'reference' => self::ADMIN_REFERENCE
             ],
