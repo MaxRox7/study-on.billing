@@ -1,7 +1,7 @@
 name: CI
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "new-branch" ]
   workflow_dispatch:
 jobs:
   build:
@@ -25,10 +25,10 @@ jobs:
         run: |
           git config --global --add safe.directory /app
           cat << EOF > .env.local
-          DATABASE_URL="pgsql://pguser:pguser@study-onbilling-postgres-1:5432/study_on"
+          DATABASE_URL="pgsql://pguser:pguser@study-onbilling-postgres-1:5434/study_on"
           JWT_SECRET_KEY="%kernel.project_dir%/config/jwt/private.pem"
           JWT_PUBLIC_KEY="%kernel.project_dir%/config/jwt/public.pem"
-          JWT_PASSPHRASE="1234"
+          JWT_PASSPHRASE="maxim"
           EOF
           cat .env.local
           composer install
@@ -46,7 +46,7 @@ jobs:
       - name: Setting test environment and DB
 #        проверяйте название контейнера и БД
         run: |
-          echo "DATABASE_URL=pgsql://pguser:pguser@study-onbilling-postgres-1:5432/study_on" >> .env.test.local
+          echo "DATABASE_URL=pgsql://pguser:pguser@study-onbilling-postgres-1:5434/study_on" >> .env.test.local
           ls -la
           docker ps -a
           docker-compose exec -T php bin/console doctrine:database:drop --force --env=test || true
