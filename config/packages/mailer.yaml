@@ -8,4 +8,4 @@ framework:
 when@test:
     framework:
         mailer:
-            dsn: 'null://null' 
+            transport: 'null://null' 

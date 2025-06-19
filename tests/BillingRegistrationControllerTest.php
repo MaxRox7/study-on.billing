@@ -21,10 +21,15 @@ class BillingRegistrationControllerTest extends WebTestCase
 
     protected function setUp(): void
     {
-        $this->client = self::createClient();
-        $this->em = self::getContainer()->get(EntityManagerInterface::class);
-        $this->passwordHasher = self::getContainer()->get(UserPasswordHasherInterface::class);
-        $this->jwtManager = self::getContainer()->get('lexik_jwt_authentication.jwt_manager');
+        parent::setUp();
+        $this->client = static::createClient();
+        $container = static::getContainer();
+        
+        $this->em = $container->get(EntityManagerInterface::class);
+        $this->passwordHasher = $container->get(UserPasswordHasherInterface::class);
+        $this->jwtManager = $container->get('lexik_jwt_authentication.jwt_manager');
+        
+        // Начинаем транзакцию для изоляции тестов
         $this->em->getConnection()->beginTransaction();
     }
 
@@ -40,8 +45,15 @@ class BillingRegistrationControllerTest extends WebTestCase
 
     protected function tearDown(): void
     {
-        $this->em->getConnection()->rollBack();
         parent::tearDown();
+        
+        // Проверяем, что транзакция еще активна перед откатом
+        if ($this->em->getConnection()->isTransactionActive()) {
+            $this->em->getConnection()->rollBack();
+        }
+        
+        // Закрываем entity manager
+        $this->em->close();
     }
 
     public function testSuccessfulRegistration(): void

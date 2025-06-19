@@ -21,10 +21,16 @@ class BillingAuthControllerTest extends WebTestCase
 
     protected function setUp(): void
     {
-        $this->client = self::createClient();
-        $this->em = self::getContainer()->get(EntityManagerInterface::class);
-        $this->passwordHasher = self::getContainer()->get(UserPasswordHasherInterface::class);
-        $this->jwtManager = self::getContainer()->get('lexik_jwt_authentication.jwt_manager');
+        parent::setUp();
+        $this->client = static::createClient();
+        $container = static::getContainer();
+        
+        $this->em = $container->get(EntityManagerInterface::class);
+        $this->passwordHasher = $container->get(UserPasswordHasherInterface::class);
+        $this->jwtManager = $container->get('lexik_jwt_authentication.jwt_manager');
+        
+        // Начинаем транзакцию для изоляции тестов
+        $this->em->getConnection()->beginTransaction();
         
         // Загружаем фикстуры
         $this->loadFixtures();
@@ -43,6 +49,14 @@ class BillingAuthControllerTest extends WebTestCase
     protected function tearDown(): void
     {
         parent::tearDown();
+        
+        // Проверяем, что транзакция еще активна перед откатом
+        if ($this->em->getConnection()->isTransactionActive()) {
+            $this->em->getConnection()->rollBack();
+        }
+        
+        // Закрываем entity manager
+        $this->em->close();
     }
 
     public function testSuccessfulAuth(): void
@@ -237,6 +251,7 @@ class BillingAuthControllerTest extends WebTestCase
         $user->setEmail('specific@test.com');
         $user->setPassword($this->passwordHasher->hashPassword($user, 'special123'));
         $user->setRoles(['ROLE_USER']);
+        $user->setBalance(1000.0); // Добавляем баланс если нужно
         $this->em->persist($user);
         $this->em->flush();
 
