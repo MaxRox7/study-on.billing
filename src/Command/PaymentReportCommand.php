@@ -71,17 +71,8 @@ class PaymentReportCommand extends Command
         ));
 
         // Запрос всех оплат за период
-        $qb = $this->em->getRepository(Transaction::class)->createQueryBuilder('t')
-            ->innerJoin('t.course', 'c')
-            ->where('t.type = :payment_type')
-            ->andWhere('t.amount < 0') // только списания (платежи)
-            ->andWhere('t.createdAt BETWEEN :start AND :end')
-            ->setParameter('payment_type', PaymentService::TYPE_PAYMENT)
-            ->setParameter('start', $startDate)
-            ->setParameter('end', $endDate)
-            ->orderBy('c.title', 'ASC');
-
-        $transactions = $qb->getQuery()->getResult();
+        $transactions = $this->em->getRepository(Transaction::class)
+            ->findPaymentTransactionsForPeriod($startDate, $endDate);
 
         if (empty($transactions)) {
             $io->warning('За указанный период оплат не найдено.');

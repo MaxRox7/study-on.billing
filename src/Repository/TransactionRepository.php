@@ -15,4 +15,40 @@ class TransactionRepository extends ServiceEntityRepository
     {
         parent::__construct($registry, Transaction::class);
     }
+
+    /**
+     * Найти транзакции, истекающие в указанный период
+     */
+    public function findExpiringTransactions(\DateTimeInterface $startDate, \DateTimeInterface $endDate): array
+    {
+        return $this->createQueryBuilder('t')
+            ->innerJoin('t.user', 'u')
+            ->innerJoin('t.course', 'c')
+            ->where('t.type = :payment_type')
+            ->andWhere('t.expiresAt BETWEEN :start AND :end')
+            ->andWhere('t.amount < 0') // только списания (платежи)
+            ->setParameter('payment_type', \App\Service\PaymentService::TYPE_PAYMENT)
+            ->setParameter('start', $startDate)
+            ->setParameter('end', $endDate)
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Найти транзакции-платежи за указанный период для отчета
+     */
+    public function findPaymentTransactionsForPeriod(\DateTimeInterface $startDate, \DateTimeInterface $endDate): array
+    {
+        return $this->createQueryBuilder('t')
+            ->innerJoin('t.course', 'c')
+            ->where('t.type = :payment_type')
+            ->andWhere('t.amount < 0') // только списания (платежи)
+            ->andWhere('t.createdAt BETWEEN :start AND :end')
+            ->setParameter('payment_type', \App\Service\PaymentService::TYPE_PAYMENT)
+            ->setParameter('start', $startDate)
+            ->setParameter('end', $endDate)
+            ->orderBy('c.title', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
 }

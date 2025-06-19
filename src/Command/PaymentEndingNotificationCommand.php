@@ -39,17 +39,8 @@ class PaymentEndingNotificationCommand extends Command
         $tomorrowStart = $tomorrow->setTime(0, 0, 0);
         $tomorrowEnd = $tomorrow->setTime(23, 59, 59);
 
-        $qb = $this->em->getRepository(Transaction::class)->createQueryBuilder('t')
-            ->innerJoin('t.user', 'u')
-            ->innerJoin('t.course', 'c')
-            ->where('t.type = :payment_type')
-            ->andWhere('t.expiresAt BETWEEN :start AND :end')
-            ->andWhere('t.amount < 0') // только списания (платежи)
-            ->setParameter('payment_type', PaymentService::TYPE_PAYMENT)
-            ->setParameter('start', $tomorrowStart)
-            ->setParameter('end', $tomorrowEnd);
-
-        $expiringTransactions = $qb->getQuery()->getResult();
+        $expiringTransactions = $this->em->getRepository(Transaction::class)
+            ->findExpiringTransactions($tomorrowStart, $tomorrowEnd);
 
         if (empty($expiringTransactions)) {
             $io->success('Курсов с истекающей завтра арендой не найдено.');
