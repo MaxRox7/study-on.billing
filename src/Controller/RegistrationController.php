@@ -172,7 +172,7 @@ class RegistrationController extends AbstractController
         )
     )]
     #[Security(name: 'Bearer')]
-    public function getCurrentUser(#[CurrentUser] User $user = null): JsonResponse
+    public function getCurrentUser(#[CurrentUser] ?User $user = null): JsonResponse
     {
         if (!$user) {
             return $this->json(['message' => 'Not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);

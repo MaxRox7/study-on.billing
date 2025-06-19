@@ -45,7 +45,7 @@ class UserFixtures extends Fixture
             ],
             [
                 'email' => 'manager@example.com',
-                'roles' => ['ROLE_MANAGER'],
+                'roles' => ['ROLE_SUPER_ADMIN'],
                 'balance' => 500.00,
                 'reference' => self::MANAGER_REFERENCE
             ],
