@@ -15,9 +15,15 @@ class UserFixtures extends Fixture
     public const TEST_USER_REFERENCE = 'test-user-1';
     public const RICH_USER_REFERENCE = 'rich-user-1';
 
-    private UserPasswordHasherInterface $passwordHasher;
+    private ?UserPasswordHasherInterface $passwordHasher;
 
-    public function __construct(UserPasswordHasherInterface $passwordHasher)
+    /**
+     * @param UserPasswordHasherInterface|null $passwordHasher
+     * В тестах Doctrine может создавать фикстуры через отражение (Reflection),
+     * не передавая зависимостей. Поэтому делаем зависимость опциональной,
+     * а при её отсутствии используем встроенную функцию password_hash().
+     */
+    public function __construct(?UserPasswordHasherInterface $passwordHasher = null)
     {
         $this->passwordHasher = $passwordHasher;
     }
@@ -62,9 +68,13 @@ class UserFixtures extends Fixture
             $user->setEmail($data['email']);
             $user->setRoles($data['roles']);
             $user->setBalance($data['balance']);
-            $user->setPassword(
-                $this->passwordHasher->hashPassword($user, 'password')
-            );
+            // Если хешер не был передан (например, при создании через Reflection)
+            // используем стандартный bcrypt.
+            $hashedPassword = $this->passwordHasher
+                ? $this->passwordHasher->hashPassword($user, 'password')
+                : password_hash('password', PASSWORD_BCRYPT);
+
+            $user->setPassword($hashedPassword);
             
             $manager->persist($user);
             $this->addReference($data['reference'], $user);
@@ -72,4 +82,5 @@ class UserFixtures extends Fixture
 
         $manager->flush();
     }
+    
 }

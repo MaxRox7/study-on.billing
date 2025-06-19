@@ -75,4 +75,11 @@ class CourseFixtures extends Fixture
 
         $manager->flush();
     }
+
+    public function getDependencies(): array
+    {
+        return [
+            UserFixtures::class, // Если CourseFixtures использует пользователей
+        ];
+    }
 } 
