@@ -21,8 +21,23 @@ migrate:
 fixtload:
 	@${CONSOLE} doctrine:fixtures:load
 
+encore_dev:
+	@yarn encore dev
+
+encore_prod:
+	@ yarn encore production
+
+phpunit-dox:
+	@${PHP} bin/phpunit --testdox
+
 phpunit:
 	@${PHP} bin/phpunit
+
+phpunit-clean:
+	@${PHP} bin/phpunit --no-output
+
+phpunit-brief:
+	@${PHP} bin/phpunit --testdox-html=/dev/null
 
 git-reset:
 	@git reset --hard

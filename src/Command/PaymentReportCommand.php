@@ -68,11 +68,16 @@ class PaymentReportCommand extends Command
         $io->title('Генерация отчета по оплаченным курсам');
 
         // Определяем период отчета
-        [$startDate, $endDate] = $this->determinePeriod($input, $io);
+        try {
+            [$startDate, $endDate] = $this->determinePeriod($input, $io);
+        } catch (\Throwable $e) {
+            // Сообщение уже выведено в determinePeriod через $io->error()
+            return Command::FAILURE;
+        }
 
         $io->writeln(sprintf('Период отчета: %s - %s', 
-            $startDate->format('d.m.Y'), 
-            $endDate->format('d.m.Y')
+            $startDate->format('Y-m-d'), 
+            $endDate->format('Y-m-d')
         ));
 
         // Запрос всех оплат за период
@@ -135,16 +140,17 @@ class PaymentReportCommand extends Command
             try {
                 $startDate = new \DateTimeImmutable($startDateOption);
                 $endDate = new \DateTimeImmutable($endDateOption . ' 23:59:59');
-                
-                if ($startDate > $endDate) {
-                    throw new \InvalidArgumentException('Дата начала не может быть больше даты окончания.');
-                }
-                
-                return [$startDate, $endDate];
             } catch (\Exception $e) {
                 $io->error('Неверный формат даты. Используйте формат Y-m-d (например: 2025-05-01)');
                 throw $e;
             }
+
+            if ($startDate > $endDate) {
+                $io->error('Дата начала не может быть больше даты окончания');
+                throw new \InvalidArgumentException('Дата начала не может быть больше даты окончания');
+            }
+
+            return [$startDate, $endDate];
         }
 
         // Если указан месяц
@@ -200,8 +206,8 @@ class PaymentReportCommand extends Command
             ->from('noreply@study-on.local')
             ->to($reportEmail)
             ->subject(sprintf('Отчет об оплаченных курсах за период %s - %s', 
-                $startDate->format('d.m.Y'), 
-                $endDate->format('d.m.Y')
+                $startDate->format('Y-m-d'), 
+                $endDate->format('Y-m-d')
             ))
             ->html($htmlBody);
 

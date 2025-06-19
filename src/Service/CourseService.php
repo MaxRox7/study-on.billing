@@ -36,6 +36,15 @@ class CourseService
 
     public function createCourse(array $data): Course
     {
+        // Валидация данных
+        $errors = $this->validateCourseData($data);
+        if ($errors) {
+            throw new \InvalidArgumentException(json_encode(['errors' => $errors], JSON_UNESCAPED_UNICODE));
+        }
+
+        // Проверка уникальности кода
+        $this->checkCodeUniqueness($data['code']);
+
         $course = new Course();
         $course->setCode($data['code']);
         $course->setTitle($data['title']);
@@ -46,13 +55,28 @@ class CourseService
         $course->setPrice($price);
         $course->setType($courseType);
 
-        $this->courseRepository->save($course, true);
+        $this->em->persist($course);
+        $this->em->flush();
 
         return $course;
     }
 
-    public function updateCourse(Course $course, array $data): Course
+    public function updateCourse(string $originalCode, array $data): Course
     {
+        // Валидация данных
+        $errors = $this->validateCourseData($data);
+        if ($errors) {
+            throw new \InvalidArgumentException(json_encode(['errors' => $errors], JSON_UNESCAPED_UNICODE));
+        }
+
+        // Ищем существующий курс
+        $course = $this->findCourseByCode($originalCode);
+
+        // Если код изменился, проверяем уникальность нового кода
+        if ($course->getCode() !== $data['code']) {
+            $this->checkCodeUniqueness($data['code']);
+        }
+
         $course->setCode($data['code']);
         $course->setTitle($data['title']);
 
@@ -62,7 +86,8 @@ class CourseService
         $course->setPrice($price);
         $course->setType($courseType);
 
-        $this->courseRepository->save($course, true);
+        $this->em->persist($course);
+        $this->em->flush();
 
         return $course;
     }
@@ -79,12 +104,12 @@ class CourseService
             $errors['title'] = 'Title is required';
         }
 
-        $courseType = Course::getTypeFromString($data['type']);
-        if (!$courseType) {
+        $courseType = isset($data['type']) ? Course::getTypeFromString($data['type']) : null;
+        if ($courseType === null) {
             $errors['type'] = 'Invalid course type';
         }
 
-        if ($courseType && $courseType !== Course::TYPE_FREE) {
+        if ($courseType !== null && $courseType !== Course::TYPE_FREE) {
             if (!isset($data['price']) || !is_numeric($data['price']) || $data['price'] < 0) {
                 $errors['price'] = 'Для платных курсов требуется корректная цена';
             }
