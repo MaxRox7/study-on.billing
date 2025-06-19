@@ -19,23 +19,20 @@ final class Version20250616163807 extends AbstractMigration
 
     public function up(Schema $schema): void
     {
-        // this up() migration is auto-generated, please modify it to your needs
+        // Таблица billing_user была создана в более ранних миграциях.
+        // Добавляем недостающий столбец balance, если его ещё нет.
         $this->addSql(<<<'SQL'
-            CREATE TABLE billing_user (id SERIAL NOT NULL, email VARCHAR(180) NOT NULL, roles JSON NOT NULL, password VARCHAR(255) NOT NULL, balance NUMERIC(10, 2) DEFAULT '0' NOT NULL, PRIMARY KEY(id))
-        SQL);
-        $this->addSql(<<<'SQL'
-            CREATE UNIQUE INDEX UNIQ_IDENTIFIER_EMAIL ON billing_user (email)
+            ALTER TABLE billing_user
+            ADD COLUMN IF NOT EXISTS balance NUMERIC(10,2) DEFAULT '0' NOT NULL
         SQL);
     }
 
     public function down(Schema $schema): void
     {
-        // this down() migration is auto-generated, please modify it to your needs
+        // Удаляем добавленный столбец при откате
         $this->addSql(<<<'SQL'
-            CREATE SCHEMA public
-        SQL);
-        $this->addSql(<<<'SQL'
-            DROP TABLE billing_user
+            ALTER TABLE billing_user
+            DROP COLUMN IF EXISTS balance
         SQL);
     }
 }
