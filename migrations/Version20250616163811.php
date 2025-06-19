@@ -19,23 +19,13 @@ final class Version20250616163811 extends AbstractMigration
 
     public function up(Schema $schema): void
     {
-        // this up() migration is auto-generated, please modify it to your needs
-        $this->addSql(<<<'SQL'
-            CREATE TABLE billing_user (id SERIAL NOT NULL, email VARCHAR(180) NOT NULL, roles JSON NOT NULL, password VARCHAR(255) NOT NULL, balance NUMERIC(10, 2) DEFAULT '0' NOT NULL, PRIMARY KEY(id))
-        SQL);
-        $this->addSql(<<<'SQL'
-            CREATE UNIQUE INDEX UNIQ_IDENTIFIER_EMAIL ON billing_user (email)
-        SQL);
+        // Таблица billing_user уже создана предыдущей миграцией 20250616163807.
+        // Чтобы избежать ошибки «relation already exists» при полном откате/пересборке БД,
+        // эта миграция оставлена пустой.
     }
 
     public function down(Schema $schema): void
     {
-        // this down() migration is auto-generated, please modify it to your needs
-        $this->addSql(<<<'SQL'
-            CREATE SCHEMA public
-        SQL);
-        $this->addSql(<<<'SQL'
-            DROP TABLE billing_user
-        SQL);
+        // Ничего не делаем. Обратное действие не требуется.
     }
 }
