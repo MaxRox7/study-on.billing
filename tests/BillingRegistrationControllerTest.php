@@ -2,7 +2,11 @@
 
 namespace App\Tests;
 
+use App\DataFixtures\UserFixtures;
 use App\Entity\User;
+use Doctrine\Common\DataFixtures\Executor\ORMExecutor;
+use Doctrine\Common\DataFixtures\Loader;
+use Doctrine\Common\DataFixtures\Purger\ORMPurger;
 use Doctrine\ORM\EntityManagerInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTManager;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -22,6 +26,16 @@ class BillingRegistrationControllerTest extends WebTestCase
         $this->passwordHasher = self::getContainer()->get(UserPasswordHasherInterface::class);
         $this->jwtManager = self::getContainer()->get('lexik_jwt_authentication.jwt_manager');
         $this->em->getConnection()->beginTransaction();
+    }
+
+    private function loadFixtures(): void
+    {
+        $loader = new Loader();
+        $loader->addFixture(new UserFixtures($this->passwordHasher));
+        
+        $purger = new ORMPurger($this->em);
+        $executor = new ORMExecutor($this->em, $purger);
+        $executor->execute($loader->getFixtures());
     }
 
     protected function tearDown(): void
@@ -68,16 +82,17 @@ class BillingRegistrationControllerTest extends WebTestCase
         $this->assertResponseStatusCodeSame(400);
         $response = json_decode($this->client->getResponse()->getContent(), true);
         $this->assertArrayHasKey('errors', $response);
-        $this->assertEquals('Неверный формат email', $response['errors']['email']);
+        $this->assertArrayHasKey('email', $response['errors'], 'Ошибка должна быть именно для поля email');
+        $this->assertEquals('Неверный формат email', $response['errors']['email'], 'Ошибка должна точно соответствовать ожидаемому тексту');
+        
+        // Проверяем, что ошибка только для поля email, а не для password
+        $this->assertArrayNotHasKey('password', $response['errors'], 'Для корректного password не должно быть ошибки');
     }
 
     public function testRegistrationWithExistingEmail(): void
     {
-        $existingUser = new User();
-        $existingUser->setEmail('existing@example.com');
-        $existingUser->setPassword($this->passwordHasher->hashPassword($existingUser, 'password'));
-        $this->em->persist($existingUser);
-        $this->em->flush();
+        // Загружаем фикстуры, чтобы использовать существующего пользователя
+        $this->loadFixtures();
 
         $this->client->request(
             'POST',
@@ -86,7 +101,7 @@ class BillingRegistrationControllerTest extends WebTestCase
             [],
             ['CONTENT_TYPE' => 'application/json'],
             json_encode([
-                'email' => 'existing@example.com',
+                'email' => 'user@mail.ru', // Используем email из фикстур
                 'password' => 'newpassword'
             ])
         );
@@ -94,18 +109,21 @@ class BillingRegistrationControllerTest extends WebTestCase
         $this->assertResponseStatusCodeSame(400);
         $response = json_decode($this->client->getResponse()->getContent(), true);
         $this->assertArrayHasKey('errors', $response);
-        $this->assertEquals('Пользователь с таким email уже существует', $response['errors']['email']);
+        $this->assertArrayHasKey('email', $response['errors'], 'Ошибка должна быть именно для поля email');
+        $this->assertEquals('Пользователь с таким email уже существует', $response['errors']['email'], 'Ошибка должна точно соответствовать ожидаемому тексту');
+        
+        // Проверяем, что ошибка только для поля email, а не для password
+        $this->assertArrayNotHasKey('password', $response['errors'], 'Для корректного password не должно быть ошибки');
     }
     
 
     public function testGetCurrentUserAuthenticated(): void
     {
-        $user = new User();
-        $user->setEmail('test@example.com');
-        $user->setPassword($this->passwordHasher->hashPassword($user, 'password123'));
-        $user->setRoles(['ROLE_USER']);
-        $this->em->persist($user);
-        $this->em->flush();
+        // Загружаем фикстуры и используем готового пользователя
+        $this->loadFixtures();
+        
+        $user = $this->em->getRepository(User::class)->findOneBy(['email' => 'test@example.com']);
+        $this->assertNotNull($user, 'Пользователь из фикстур должен существовать');
 
         $token = $this->jwtManager->create($user);
 
@@ -147,7 +165,11 @@ class BillingRegistrationControllerTest extends WebTestCase
         $this->assertResponseStatusCodeSame(400);
         $response = json_decode($this->client->getResponse()->getContent(), true);
         $this->assertArrayHasKey('errors', $response);
-        $this->assertStringContainsString('минимум 6 символов', $response['errors']['password']);
+        $this->assertArrayHasKey('password', $response['errors'], 'Ошибка должна быть именно для поля password');
+        $this->assertStringContainsString('минимум 6 символов', $response['errors']['password'], 'Ошибка должна содержать информацию о минимальной длине пароля');
+        
+        // Проверяем, что ошибка только для поля password, а не для email
+        $this->assertArrayNotHasKey('email', $response['errors'], 'Для корректного email не должно быть ошибки');
     }
 
     public function testRegistrationWithoutPassword(): void
@@ -166,7 +188,11 @@ class BillingRegistrationControllerTest extends WebTestCase
         $this->assertResponseStatusCodeSame(400);
         $response = json_decode($this->client->getResponse()->getContent(), true);
         $this->assertArrayHasKey('errors', $response);
-        $this->assertEquals('Пароль обязателен', $response['errors']['password']);
+        $this->assertArrayHasKey('password', $response['errors'], 'Ошибка должна быть именно для поля password');
+        $this->assertEquals('Пароль обязателен', $response['errors']['password'], 'Ошибка должна точно соответствовать ожидаемому тексту');
+        
+        // Проверяем, что ошибка только для поля password, а не для email
+        $this->assertArrayNotHasKey('email', $response['errors'], 'Для корректного email не должно быть ошибки');
     }
 
     public function testRegistrationWithoutEmail(): void
@@ -185,7 +211,11 @@ class BillingRegistrationControllerTest extends WebTestCase
         $this->assertResponseStatusCodeSame(400);
         $response = json_decode($this->client->getResponse()->getContent(), true);
         $this->assertArrayHasKey('errors', $response);
-        $this->assertEquals('Email обязателен', $response['errors']['email']);
+        $this->assertArrayHasKey('email', $response['errors'], 'Ошибка должна быть именно для поля email');
+        $this->assertEquals('Email обязателен', $response['errors']['email'], 'Ошибка должна точно соответствовать ожидаемому тексту');
+        
+        // Проверяем, что ошибка только для поля email, а не для password
+        $this->assertArrayNotHasKey('password', $response['errors'], 'Для корректного password не должно быть ошибки');
     }
 
     public function testRegistrationWithEmptyRequest(): void

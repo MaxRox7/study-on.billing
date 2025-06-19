@@ -3,14 +3,14 @@
 namespace App\Command;
 
 use App\Entity\Transaction;
-use App\Service\PaymentService;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Repository\TransactionRepository;
+use App\Service\MailerSwitcher;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
-use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
 use Twig\Environment;
 
@@ -21,11 +21,32 @@ use Twig\Environment;
 class PaymentEndingNotificationCommand extends Command
 {
     public function __construct(
-        private EntityManagerInterface $em,
-        private MailerInterface $mailer,
+        private TransactionRepository $transactionRepository,
+        private MailerSwitcher $mailerSwitcher,
         private Environment $twig
     ) {
         parent::__construct();
+    }
+
+    protected function configure(): void
+    {
+        $this
+            ->addOption('real-email', null, InputOption::VALUE_NONE, 'Отправить реальные письма через Gmail')
+            ->addOption('both', null, InputOption::VALUE_NONE, 'Отправить и в MailHog и через Gmail')
+            ->setHelp('
+Отправляет уведомления пользователям о курсах, срок аренды которых истекает завтра.
+
+Примеры использования:
+
+1. Отправить уведомления в MailHog (по умолчанию):
+   docker-compose exec php bin/console payment:ending:notification
+
+2. Отправить реальные письма через Gmail:
+   docker-compose exec php bin/console payment:ending:notification --real-email
+
+3. Отправить и в MailHog и через Gmail одновременно:
+   docker-compose exec php bin/console payment:ending:notification --both
+            ');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -39,8 +60,7 @@ class PaymentEndingNotificationCommand extends Command
         $tomorrowStart = $tomorrow->setTime(0, 0, 0);
         $tomorrowEnd = $tomorrow->setTime(23, 59, 59);
 
-        $expiringTransactions = $this->em->getRepository(Transaction::class)
-            ->findExpiringTransactions($tomorrowStart, $tomorrowEnd);
+        $expiringTransactions = $this->transactionRepository->findExpiringTransactions($tomorrowStart, $tomorrowEnd);
 
         if (empty($expiringTransactions)) {
             $io->success('Курсов с истекающей завтра арендой не найдено.');
@@ -63,7 +83,7 @@ class PaymentEndingNotificationCommand extends Command
         $sentCount = 0;
         foreach ($userTransactions as $userData) {
             try {
-                $this->sendNotification($userData['user'], $userData['transactions']);
+                $this->sendNotification($userData['user'], $userData['transactions'], $input);
                 $sentCount++;
                 $io->writeln(sprintf('Уведомление отправлено пользователю: %s', $userData['user']->getEmail()));
             } catch (\Exception $e) {
@@ -77,7 +97,7 @@ class PaymentEndingNotificationCommand extends Command
         return Command::SUCCESS;
     }
 
-    private function sendNotification($user, array $transactions): void
+    private function sendNotification($user, array $transactions, InputInterface $input): void
     {
         // Формируем данные о курсах
         $courses = [];
@@ -101,6 +121,12 @@ class PaymentEndingNotificationCommand extends Command
             ->subject('Уведомление об окончании срока аренды курсов')
             ->html($htmlBody);
 
-        $this->mailer->send($email);
+        // Выбираем способ отправки на основе опций
+        if ($input->getOption('both')) {
+            $this->mailerSwitcher->sendBoth($email);
+        } else {
+            $useRealEmail = $input->getOption('real-email');
+            $this->mailerSwitcher->send($email, $useRealEmail);
+        }
     }
 } 

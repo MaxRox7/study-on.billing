@@ -14,8 +14,6 @@ class PaymentService
 {
     public const TYPE_DEPOSIT = 0;
     public const TYPE_PAYMENT = 1;
-    public const COURSE_TYPE_RENT = 0;
-    public const COURSE_TYPE_FREE = 3;
 
     public function __construct(
         private EntityManagerInterface $em,
@@ -48,6 +46,27 @@ class PaymentService
     }
 
     /**
+     * Оплата курса по коду
+     * @throws \RuntimeException
+     */
+    public function payCourseByCode(User $user, string $courseCode): array
+    {
+        $course = $this->courseRepository->findOneBy(['code' => $courseCode]);
+        if (!$course) {
+            throw new \RuntimeException('Курс не найден');
+        }
+
+        $transaction = $this->payCourse($user, $course);
+        $courseType = $course->getType();
+
+        return [
+            'success' => true,
+            'course_type' => $course->getTypeAsString(),
+            'expires_at' => $transaction->getExpiresAt()?->format(DATE_ATOM),
+        ];
+    }
+
+    /**
      * Оплата курса пользователем
      * @throws \RuntimeException
      */
@@ -55,7 +74,9 @@ class PaymentService
     {
         return $this->em->wrapInTransaction(function () use ($user, $course) {
             $price = $course->getPrice();
-            if ($course->getType() === self::COURSE_TYPE_FREE) {
+            $courseType = $course->getType();
+
+            if ($courseType === Course::TYPE_FREE) {
                 return $this->createTransaction(
                     user: $user,
                     course: $course,
@@ -64,13 +85,16 @@ class PaymentService
                     expiresAt: null
                 );
             }
+
             if ($user->getBalance() < $price) {
                 throw new \RuntimeException('Недостаточно средств на балансе');
             }
+
             $expiresAt = null;
-            if ($course->getType() === self::COURSE_TYPE_RENT) {
+            if ($courseType === Course::TYPE_RENT) {
                 $expiresAt = (new \DateTimeImmutable())->modify('+30 days');
             }
+
             $transaction = $this->createTransaction(
                 user: $user,
                 course: $course,
@@ -78,8 +102,10 @@ class PaymentService
                 amount: -$price,
                 expiresAt: $expiresAt
             );
+
             $user->setBalance($user->getBalance() - $price);
             $this->em->persist($user);
+            
             return $transaction;
         });
     }

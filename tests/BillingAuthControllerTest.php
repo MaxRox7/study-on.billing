@@ -2,7 +2,11 @@
 
 namespace App\Tests;
 
+use App\DataFixtures\UserFixtures;
 use App\Entity\User;
+use Doctrine\Common\DataFixtures\Executor\ORMExecutor;
+use Doctrine\Common\DataFixtures\Loader;
+use Doctrine\Common\DataFixtures\Purger\ORMPurger;
 use Doctrine\ORM\EntityManagerInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTManager;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -22,8 +26,18 @@ class BillingAuthControllerTest extends WebTestCase
         $this->passwordHasher = self::getContainer()->get(UserPasswordHasherInterface::class);
         $this->jwtManager = self::getContainer()->get('lexik_jwt_authentication.jwt_manager');
         
-        // Очищаем таблицу users перед каждым тестом
-        $this->em->createQuery('DELETE FROM App\Entity\User')->execute();
+        // Загружаем фикстуры
+        $this->loadFixtures();
+    }
+
+    private function loadFixtures(): void
+    {
+        $loader = new Loader();
+        $loader->addFixture(new UserFixtures($this->passwordHasher));
+        
+        $purger = new ORMPurger($this->em);
+        $executor = new ORMExecutor($this->em, $purger);
+        $executor->execute($loader->getFixtures());
     }
 
     protected function tearDown(): void
@@ -33,14 +47,6 @@ class BillingAuthControllerTest extends WebTestCase
 
     public function testSuccessfulAuth(): void
     {
-        // Создаем пользователя для авторизации
-        $user = new User();
-        $user->setEmail('testuser@example.com');
-        $user->setPassword($this->passwordHasher->hashPassword($user, '123456'));
-        $user->setRoles(['ROLE_USER']);
-        $this->em->persist($user);
-        $this->em->flush();
-
         $this->client->request(
             'POST',
             '/api/v1/auth',
@@ -48,8 +54,8 @@ class BillingAuthControllerTest extends WebTestCase
             [],
             ['CONTENT_TYPE' => 'application/json'],
             json_encode([
-                'email' => 'testuser@example.com',
-                'password' => '123456'
+                'email' => 'user@mail.ru',
+                'password' => 'password'
             ])
         );
 
@@ -69,7 +75,7 @@ class BillingAuthControllerTest extends WebTestCase
             ['CONTENT_TYPE' => 'application/json'],
             json_encode([
                 'email' => 'nonexistent@example.com',
-                'password' => 'password123'
+                'password' => 'password'
             ])
         );
 
@@ -81,14 +87,6 @@ class BillingAuthControllerTest extends WebTestCase
 
     public function testAuthWithInvalidPassword(): void
     {
-        // Создаем пользователя
-        $user = new User();
-        $user->setEmail('invalidpassword@example.com');
-        $user->setPassword($this->passwordHasher->hashPassword($user, 'correctpassword'));
-        $user->setRoles(['ROLE_USER']);
-        $this->em->persist($user);
-        $this->em->flush();
-
         $this->client->request(
             'POST',
             '/api/v1/auth',
@@ -96,7 +94,7 @@ class BillingAuthControllerTest extends WebTestCase
             [],
             ['CONTENT_TYPE' => 'application/json'],
             json_encode([
-                'email' => 'invalidpassword@example.com',
+                'email' => 'user@mail.ru',
                 'password' => 'wrongpassword'
             ])
         );
@@ -123,8 +121,11 @@ class BillingAuthControllerTest extends WebTestCase
         $this->assertResponseStatusCodeSame(401);
         $response = json_decode($this->client->getResponse()->getContent(), true);
         $this->assertArrayHasKey('error', $response);
-        $this->assertArrayHasKey('email', $response['error']);
-        $this->assertEquals('Email обязателен', $response['error']['email']);
+        $this->assertArrayHasKey('email', $response['error'], 'Ошибка должна быть именно для поля email');
+        $this->assertEquals('Email обязателен', $response['error']['email'], 'Ошибка должна точно соответствовать ожидаемому тексту');
+        
+        // Проверяем, что ошибка только для поля email, а не для password
+        $this->assertArrayNotHasKey('password', $response['error'], 'Для корректного password не должно быть ошибки');
     }
 
     public function testAuthWithoutPassword(): void
@@ -136,15 +137,18 @@ class BillingAuthControllerTest extends WebTestCase
             [],
             ['CONTENT_TYPE' => 'application/json'],
             json_encode([
-                'email' => 'nopassword@example.com'
+                'email' => 'user@mail.ru'
             ])
         );
 
         $this->assertResponseStatusCodeSame(401);
         $response = json_decode($this->client->getResponse()->getContent(), true);
         $this->assertArrayHasKey('error', $response);
-        $this->assertArrayHasKey('password', $response['error']);
-        $this->assertEquals('Пароль обязателен', $response['error']['password']);
+        $this->assertArrayHasKey('password', $response['error'], 'Ошибка должна быть именно для поля password');
+        $this->assertEquals('Пароль обязателен', $response['error']['password'], 'Ошибка должна точно соответствовать ожидаемому тексту');
+        
+        // Проверяем, что ошибка только для поля password, а не для email
+        $this->assertArrayNotHasKey('email', $response['error'], 'Для корректного email не должно быть ошибки');
     }
 
     public function testAuthWithEmptyRequest(): void
@@ -161,10 +165,10 @@ class BillingAuthControllerTest extends WebTestCase
         $this->assertResponseStatusCodeSame(401);
         $response = json_decode($this->client->getResponse()->getContent(), true);
         $this->assertArrayHasKey('error', $response);
-        $this->assertArrayHasKey('email', $response['error']);
-        $this->assertArrayHasKey('password', $response['error']);
-        $this->assertEquals('Email обязателен', $response['error']['email']);
-        $this->assertEquals('Пароль обязателен', $response['error']['password']);
+        $this->assertArrayHasKey('email', $response['error'], 'Должна быть ошибка для поля email');
+        $this->assertArrayHasKey('password', $response['error'], 'Должна быть ошибка для поля password');
+        $this->assertEquals('Email обязателен', $response['error']['email'], 'Ошибка email должна точно соответствовать ожидаемому тексту');
+        $this->assertEquals('Пароль обязателен', $response['error']['password'], 'Ошибка password должна точно соответствовать ожидаемому тексту');
     }
 
     public function testAuthWithInvalidJson(): void
@@ -181,19 +185,14 @@ class BillingAuthControllerTest extends WebTestCase
         $this->assertResponseStatusCodeSame(401);
         $response = json_decode($this->client->getResponse()->getContent(), true);
         $this->assertArrayHasKey('error', $response);
-        $this->assertEquals('Неверный формат JSON', $response['error']);
+        $this->assertEquals('Неверный формат JSON', $response['error'], 'Ошибка должна точно соответствовать ожидаемому тексту для невалидного JSON');
+        
+        // Убеждаемся, что это общая ошибка, а не ошибка конкретного поля
+        $this->assertIsString($response['error'], 'Ошибка JSON должна быть строкой, а не массивом полей');
     }
 
     public function testAuthWithValidTokenGeneration(): void
     {
-        // Создаем пользователя
-        $user = new User();
-        $user->setEmail('tokentest@example.com');
-        $user->setPassword($this->passwordHasher->hashPassword($user, 'password123'));
-        $user->setRoles(['ROLE_USER']);
-        $this->em->persist($user);
-        $this->em->flush();
-
         $this->client->request(
             'POST',
             '/api/v1/auth',
@@ -201,8 +200,8 @@ class BillingAuthControllerTest extends WebTestCase
             [],
             ['CONTENT_TYPE' => 'application/json'],
             json_encode([
-                'email' => 'tokentest@example.com',
-                'password' => 'password123'
+                'email' => 'test@example.com',
+                'password' => 'password'
             ])
         );
 
@@ -225,6 +224,36 @@ class BillingAuthControllerTest extends WebTestCase
 
         $this->assertResponseIsSuccessful();
         $userResponse = json_decode($this->client->getResponse()->getContent(), true);
-        $this->assertEquals('tokentest@example.com', $userResponse['email']);
+        $this->assertEquals('test@example.com', $userResponse['email']);
+    }
+
+    /**
+     * Тест для случаев, когда нужно создать специфичного пользователя прямо в тесте
+     */
+    public function testAuthWithSpecificUser(): void
+    {
+        // Создаем специфичного пользователя только для этого теста
+        $user = new User();
+        $user->setEmail('specific@test.com');
+        $user->setPassword($this->passwordHasher->hashPassword($user, 'special123'));
+        $user->setRoles(['ROLE_USER']);
+        $this->em->persist($user);
+        $this->em->flush();
+
+        $this->client->request(
+            'POST',
+            '/api/v1/auth',
+            [],
+            [],
+            ['CONTENT_TYPE' => 'application/json'],
+            json_encode([
+                'email' => 'specific@test.com',
+                'password' => 'special123'
+            ])
+        );
+
+        $this->assertResponseIsSuccessful();
+        $response = json_decode($this->client->getResponse()->getContent(), true);
+        $this->assertArrayHasKey('token', $response);
     }
 } 

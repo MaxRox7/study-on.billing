@@ -2,9 +2,10 @@
 
 namespace App\Command;
 
+use App\Entity\Course;
 use App\Entity\Transaction;
-use App\Service\PaymentService;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Repository\TransactionRepository;
+use App\Service\MailerSwitcher;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -12,7 +13,6 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
-use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
 use Twig\Environment;
 
@@ -23,8 +23,8 @@ use Twig\Environment;
 class PaymentReportCommand extends Command
 {
     public function __construct(
-        private EntityManagerInterface $em,
-        private MailerInterface $mailer,
+        private TransactionRepository $transactionRepository,
+        private MailerSwitcher $mailerSwitcher,
         private Environment $twig,
         private ParameterBagInterface $parameterBag
     ) {
@@ -37,22 +37,27 @@ class PaymentReportCommand extends Command
             ->addOption('start-date', null, InputOption::VALUE_REQUIRED, 'Дата начала периода (формат: Y-m-d)')
             ->addOption('end-date', null, InputOption::VALUE_REQUIRED, 'Дата окончания периода (формат: Y-m-d)')
             ->addOption('month', null, InputOption::VALUE_REQUIRED, 'Месяц для отчета (формат: Y-m), например: 2025-05')
+            ->addOption('real-email', null, InputOption::VALUE_NONE, 'Отправить реальное письмо через Gmail')
+            ->addOption('both', null, InputOption::VALUE_NONE, 'Отправить и в MailHog и через Gmail')
             ->setHelp('
 Генерирует отчет по оплаченным курсам за указанный период.
 
 Примеры использования:
 
-1. Отчет за предыдущий месяц (по умолчанию):
+1. Отчет за предыдущий месяц в MailHog (по умолчанию):
    docker-compose exec php bin/console payment:report
 
-2. Отчет за определенный период:
+2. Отправить реальное письмо через Gmail:
+   docker-compose exec php bin/console payment:report --real-email
+
+3. Отправить и в MailHog и через Gmail одновременно:
+   docker-compose exec php bin/console payment:report --both
+
+4. Отчет за определенный период:
    docker-compose exec php bin/console payment:report --start-date=2025-05-01 --end-date=2025-05-31
 
-3. Отчет за определенный месяц:
+5. Отчет за определенный месяц:
   docker-compose exec php bin/console payment:report --month=2025-05
-
-4. Отчет за текущий месяц:
-  docker-compose exec php bin/console payment:report --month=' . date('Y-m') . '
             ');
     }
 
@@ -71,8 +76,7 @@ class PaymentReportCommand extends Command
         ));
 
         // Запрос всех оплат за период
-        $transactions = $this->em->getRepository(Transaction::class)
-            ->findPaymentTransactionsForPeriod($startDate, $endDate);
+        $transactions = $this->transactionRepository->findPaymentTransactionsForPeriod($startDate, $endDate);
 
         if (empty($transactions)) {
             $io->warning('За указанный период оплат не найдено.');
@@ -99,9 +103,9 @@ class PaymentReportCommand extends Command
             }
 
             // Увеличиваем счетчики
-            if ($course->getType() === 0) { // rent
+            if ($course->getType() === Course::TYPE_RENT) {
                 $courseStats[$courseCode]['rent_count']++;
-            } elseif ($course->getType() === 1) { // buy
+            } elseif ($course->getType() === Course::TYPE_BUY) {
                 $courseStats[$courseCode]['buy_count']++;
             }
 
@@ -110,7 +114,7 @@ class PaymentReportCommand extends Command
         }
 
         try {
-            $this->sendReport($courseStats, $totalAmount, $startDate, $endDate);
+            $this->sendReport($courseStats, $totalAmount, $startDate, $endDate, $input);
             $io->success('Отчет успешно отправлен на указанную в конфиге почту.');
         } catch (\Exception $e) {
             $io->error(sprintf('Ошибка отправки отчета: %s', $e->getMessage()));
@@ -172,14 +176,14 @@ class PaymentReportCommand extends Command
     private function getCourseTypeName(int $type): string
     {
         return match ($type) {
-            0 => 'аренда',
-            1 => 'покупка',
-            3 => 'бесплатный',
+            Course::TYPE_RENT => 'аренда',
+            Course::TYPE_BUY => 'покупка',
+            Course::TYPE_FREE => 'бесплатный',
             default => 'неизвестно'
         };
     }
 
-    private function sendReport(array $courseStats, float $totalAmount, \DateTimeImmutable $startDate, \DateTimeImmutable $endDate): void
+    private function sendReport(array $courseStats, float $totalAmount, \DateTimeImmutable $startDate, \DateTimeImmutable $endDate, InputInterface $input): void
     {
         // Получаем email получателя из конфига (можно добавить в services.yaml)
         $reportEmail = $this->parameterBag->get('app.report_email') ?? 'admin@study-on.local';
@@ -201,6 +205,12 @@ class PaymentReportCommand extends Command
             ))
             ->html($htmlBody);
 
-        $this->mailer->send($email);
+        // Выбираем способ отправки на основе опций
+        if ($input->getOption('both')) {
+            $this->mailerSwitcher->sendBoth($email);
+        } else {
+            $useRealEmail = $input->getOption('real-email');
+            $this->mailerSwitcher->send($email, $useRealEmail);
+        }
     }
 } 
