@@ -21,7 +21,7 @@ final class Version20250617100917 extends AbstractMigration
     {
         // this up() migration is auto-generated, please modify it to your needs
         $this->addSql(<<<'SQL'
-            ALTER TABLE course ADD title VARCHAR(255) NOT NULL
+            ALTER TABLE course ADD COLUMN IF NOT EXISTS title VARCHAR(255) NOT NULL
         SQL);
     }
 
