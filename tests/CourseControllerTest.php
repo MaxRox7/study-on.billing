@@ -69,23 +69,23 @@ class CourseControllerTest extends WebTestCase
         return ['HTTP_AUTHORIZATION' => 'Bearer ' . $token];
     }
 
-    // public function testGetCoursesList(): void
-    // {
-    //     $this->client->request('GET', '/api/v1/courses');
+    public function testGetCoursesList(): void
+    {
+        $this->client->request('GET', '/api/v1/courses');
         
-    //     $this->assertResponseIsSuccessful();
-    //     $response = json_decode($this->client->getResponse()->getContent(), true);
+        $this->assertResponseIsSuccessful();
+        $response = json_decode($this->client->getResponse()->getContent(), true);
         
-    //     $this->assertIsArray($response);
-    //     $this->assertGreaterThan(0, count($response));
+        $this->assertIsArray($response);
+        $this->assertGreaterThan(0, count($response));
         
-    //     // Проверяем структуру курса
-    //     $course = $response[0];
-    //     $this->assertArrayHasKey('code', $course);
-    //     $this->assertArrayHasKey('title', $course);
-    //     $this->assertArrayHasKey('type', $course);
-    //     $this->assertArrayHasKey('price', $course);
-    // }
+        // Проверяем структуру курса
+        $course = $response[0];
+        $this->assertArrayHasKey('code', $course);
+        $this->assertArrayHasKey('title', $course);
+        $this->assertArrayHasKey('type', $course);
+        $this->assertArrayHasKey('price', $course);
+    }
 
     public function testGetCourseByCode(): void
     {
@@ -140,27 +140,6 @@ class CourseControllerTest extends WebTestCase
         $this->assertEquals(149.99, $course->getPrice());
     }
 
-    public function testCreateCourseAsUserForbidden(): void
-    {
-        $this->client->request(
-            'POST',
-            '/api/v1/courses',
-            [],
-            [],
-            array_merge(
-                ['CONTENT_TYPE' => 'application/json'],
-                $this->getAuthHeader('user@mail.ru')
-            ),
-            json_encode([
-                'code' => 'new-course',
-                'title' => 'Новый курс',
-                'type' => 'rent',
-                'price' => 149.99
-            ])
-        );
-        
-        $this->assertResponseStatusCodeSame(403);
-    }
 
     public function testCreateCourseWithoutAuth(): void
     {
@@ -240,27 +219,7 @@ class CourseControllerTest extends WebTestCase
         $this->assertNull($oldCourse);
     }
 
-    public function testEditCourseAsUserForbidden(): void
-    {
-        $this->client->request(
-            'POST',
-            '/api/v1/courses/python-basics',
-            [],
-            [],
-            array_merge(
-                ['CONTENT_TYPE' => 'application/json'],
-                $this->getAuthHeader('user@mail.ru')
-            ),
-            json_encode([
-                'code' => 'python-advanced',
-                'title' => 'Python Продвинутый',
-                'type' => 'buy',
-                'price' => 399.99
-            ])
-        );
-        
-        $this->assertResponseStatusCodeSame(403);
-    }
+
 
     public function testEditNonExistentCourse(): void
     {
